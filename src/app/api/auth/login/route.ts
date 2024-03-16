@@ -11,25 +11,26 @@ const loginBody = z.object({
 
 export async function POST(request: Request) {
   const data = await request.json();
-  const response = loginBody.safeParse(data);
 
-  if (!response.success) {
-    return NextResponse.json({ error: response.error }, { status: 400 });
+  try {
+    const response = loginBody.parse(data);
+
+    const user = await prisma.user.findFirst({
+      where: {
+        id: response.id,
+      },
+    });
+
+    if (user && compareSync(response.password, user.password)) {
+      const { password, ...userWithoutPassword } = user;
+
+      const token = sign({ ...userWithoutPassword }, process.env.JWT_SECRET as string, { expiresIn: '1d' });
+
+      return NextResponse.json({ token });
+    }
+
+    return new NextResponse(null, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error }, { status: 400 });
   }
-
-  const user = await prisma.user.findFirst({
-    where: {
-      id: response.data.id,
-    },
-  });
-
-  if (user && compareSync(response.data.password, user.password)) {
-    const { password, ...userWithoutPassword } = user;
-
-    const token = sign({ ...userWithoutPassword }, process.env.JWT_SECRET as string, { expiresIn: '1d' });
-
-    return NextResponse.json({ token });
-  }
-
-  return new NextResponse(null, { status: 400 });
 }
